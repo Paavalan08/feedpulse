@@ -6,6 +6,9 @@ import { sendApiResponse } from '../utils/apiResponse';
 
 const ALLOWED_CATEGORIES = ['Bug', 'Feature Request', 'Improvement', 'Other'];
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
+const normalizeRouteParam = (value: string | string[] | undefined): string => {
+  return typeof value === 'string' ? value : '';
+};
 
 // @desc    Submit new feedback
 // @route   POST /api/feedback
@@ -204,7 +207,9 @@ export const getAllFeedback = async (req: Request, res: Response): Promise<void>
 // @access  Private (Admin Only)
 export const getFeedbackById = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    const feedbackId = normalizeRouteParam(req.params.id);
+
+    if (!mongoose.Types.ObjectId.isValid(feedbackId)) {
       sendApiResponse(res, 400, {
         success: false,
         error: 'Invalid feedback ID format',
@@ -213,7 +218,7 @@ export const getFeedbackById = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const feedback = await Feedback.findById(req.params.id);
+    const feedback = await Feedback.findById(feedbackId);
 
     if (!feedback) {
       sendApiResponse(res, 404, {
@@ -245,7 +250,7 @@ export const getFeedbackById = async (req: Request, res: Response): Promise<void
 // @access  Private (Admin Only)
 export const updateFeedbackStatus = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = normalizeRouteParam(req.params.id);
     const { status } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -302,7 +307,9 @@ export const updateFeedbackStatus = async (req: Request, res: Response): Promise
 // @access  Private (Admin Only)
 export const deleteFeedback = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    const feedbackId = normalizeRouteParam(req.params.id);
+
+    if (!mongoose.Types.ObjectId.isValid(feedbackId)) {
       sendApiResponse(res, 400, {
         success: false,
         error: 'Invalid feedback ID format',
@@ -311,7 +318,7 @@ export const deleteFeedback = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const deletedFeedback = await Feedback.findByIdAndDelete(req.params.id);
+    const deletedFeedback = await Feedback.findByIdAndDelete(feedbackId);
 
     if (!deletedFeedback) {
       sendApiResponse(res, 404, {
