@@ -100,6 +100,12 @@ Create backend env file from example:
 cp backend/.env.example backend/.env
 ```
 
+On Windows PowerShell:
+
+```powershell
+Copy-Item backend/.env.example backend/.env
+```
+
 Required values in backend/.env:
 
 - PORT=4000
@@ -156,7 +162,7 @@ Make sure GEMINI_API_KEY is available in your shell/session before running docke
 
 ## Screenshots
 
-Add at least two screenshots before submission:
+Before submission, add at least two screenshots:
 
 1. Public feedback submission page
 2. Admin dashboard page with sentiment/priority/status
