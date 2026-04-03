@@ -198,6 +198,15 @@ export const getAllFeedback = async (req: Request, res: Response): Promise<void>
 // @access  Private (Admin Only)
 export const getFeedbackById = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      sendApiResponse(res, 400, {
+        success: false,
+        error: 'Invalid feedback ID format',
+        message: 'Validation failed',
+      });
+      return;
+    }
+
     const feedback = await Feedback.findById(req.params.id);
 
     if (!feedback) {
@@ -232,6 +241,15 @@ export const updateFeedbackStatus = async (req: Request, res: Response): Promise
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      sendApiResponse(res, 400, {
+        success: false,
+        error: 'Invalid feedback ID format',
+        message: 'Validation failed',
+      });
+      return;
+    }
 
     // Validate the status input
     if (!['New', 'In Review', 'Resolved'].includes(status)) {
@@ -278,6 +296,15 @@ export const updateFeedbackStatus = async (req: Request, res: Response): Promise
 // @access  Private (Admin Only)
 export const deleteFeedback = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      sendApiResponse(res, 400, {
+        success: false,
+        error: 'Invalid feedback ID format',
+        message: 'Validation failed',
+      });
+      return;
+    }
+
     const deletedFeedback = await Feedback.findByIdAndDelete(req.params.id);
 
     if (!deletedFeedback) {
