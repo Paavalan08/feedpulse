@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import Feedback from '../models/Feedback';
-import { analyzeFeedbackWithAI } from '../services/gemini.service';
+import { analyzeFeedbackWithAI, coachFeedbackDraftWithAI } from '../services/gemini.service';
 import { sendApiResponse } from '../utils/apiResponse';
 
 const ALLOWED_CATEGORIES = ['Bug', 'Feature Request', 'Improvement', 'Other'];
@@ -161,6 +161,65 @@ export const createFeedback = async (req: Request, res: Response): Promise<void>
   }
 
   
+};
+
+// @desc    AI draft coaching for public feedback form (multi-turn)
+// @route   POST /api/feedback/coach
+// @access  Public
+export const coachFeedbackDraft = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { title, description, category, chatHistory, message } = req.body ?? {};
+
+    const sanitizedTitle = typeof title === 'string' ? title.trim() : '';
+    const sanitizedDescription = typeof description === 'string' ? description.trim() : '';
+    const sanitizedCategory = typeof category === 'string' ? category.trim() : 'Other';
+    const sanitizedMessage = typeof message === 'string' ? message.trim() : '';
+
+    if (!sanitizedMessage) {
+      sendApiResponse(res, 400, {
+        success: false,
+        error: 'Please provide a message for the AI coach',
+        message: 'Validation failed',
+      });
+      return;
+    }
+
+    const parsedHistory = Array.isArray(chatHistory)
+      ? chatHistory
+          .filter(item => item && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string')
+          .map(item => ({ role: item.role, content: item.content.trim() }))
+          .filter(item => item.content)
+      : [];
+
+    const aiResult = await coachFeedbackDraftWithAI({
+      title: sanitizedTitle,
+      description: sanitizedDescription,
+      category: ALLOWED_CATEGORIES.includes(sanitizedCategory) ? sanitizedCategory : 'Other',
+      chatHistory: parsedHistory,
+      latestUserMessage: sanitizedMessage,
+    });
+
+    if (!aiResult) {
+      sendApiResponse(res, 502, {
+        success: false,
+        error: 'AI coach is currently unavailable. Please try again.',
+        message: 'Draft coaching failed',
+      });
+      return;
+    }
+
+    sendApiResponse(res, 200, {
+      success: true,
+      data: aiResult,
+      message: 'Draft coaching response generated',
+    });
+  } catch (error) {
+    sendApiResponse(res, 500, {
+      success: false,
+      error: 'Failed to generate AI draft coaching response',
+      message: 'Draft coaching failed',
+    });
+  }
 };
 
 // @desc    Get all feedback (with filtering, sorting, pagination)

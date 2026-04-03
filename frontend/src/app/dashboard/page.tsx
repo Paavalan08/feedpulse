@@ -479,6 +479,7 @@ export default function Dashboard() {
                     {reanalyzingId === fb._id ? "Analyzing..." : "Re-analyze"}
                   </button>
                 </td>
+              </tr>
             ))}
           </tbody>
         </table>
