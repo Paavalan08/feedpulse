@@ -56,33 +56,48 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="bg-white w-full max-w-2xl rounded-xl shadow-lg p-8">
-        
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-800">FeedPulse</h1>
-          <p className="text-gray-500 mt-2">Help us improve! Share your ideas, bugs, or requests.</p>
+    <main className="min-h-screen px-4 py-10 md:px-8 md:py-14">
+      {/* Admin Console Link */}
+      <div className="absolute top-6 right-6">
+        <a
+          href="/dashboard"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm6-7a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          Admin Console
+        </a>
+      </div>
+
+      <div className="mx-auto w-full max-w-3xl surface-glass rounded-3xl p-6 md:p-8 reveal">
+        <div className="mb-8 md:mb-10">
+          <p className="label-chip mb-3">Public Feedback Portal</p>
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900">FeedPulse</h1>
+          <p className="mt-3 max-w-2xl text-sm md:text-base text-slate-600">
+            Share product pain points, feature ideas, and improvements. Your feedback is stored instantly and analyzed by AI so the product team can prioritize what matters most.
+          </p>
         </div>
 
         {/* Success Message */}
         {status === "success" && (
-          <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700">
-            <h3 className="font-bold">Thank you!</h3>
+          <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800 reveal-delay">
+            <h3 className="font-bold">Thank you for sharing feedback</h3>
             <p>Your feedback has been submitted and sent to our AI for processing.</p>
           </div>
         )}
 
         {/* Error Message */}
         {status === "error" && (
-          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700">
+          <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-800 reveal-delay">
             <p>{errorMessage}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="col-span-1 md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+              <label className="label-chip block mb-2">Title *</label>
               <input
                 required
                 maxLength={120}
@@ -91,15 +106,15 @@ export default function Home() {
                 value={formData.title}
                 onChange={handleChange}
                 placeholder="e.g., Add dark mode toggle"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="field"
               />
             </div>
 
             <div className="col-span-1 md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="label-chip block mb-2">
                 Description *
-                <span className={`float-right text-xs ${formData.description.length < 20 ? 'text-red-500' : 'text-gray-400'}`}>
-                  {formData.description.length}/20 min
+                <span className={`float-right text-[11px] ${formData.description.length < 20 ? 'text-rose-600' : 'text-slate-500'}`}>
+                  {formData.description.length} chars (min 20)
                 </span>
               </label>
               <textarea
@@ -107,19 +122,19 @@ export default function Home() {
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
-                rows={4}
+                rows={5}
                 placeholder="Please describe your feedback in detail..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="field resize-y"
               />
             </div>
 
             <div className="col-span-1 md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+              <label className="label-chip block mb-2">Category *</label>
               <select
                 name="category"
                 value={formData.category}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="field"
               >
                 <option value="Bug">Bug</option>
                 <option value="Feature Request">Feature Request</option>
@@ -129,26 +144,26 @@ export default function Home() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name (Optional)</label>
+              <label className="label-chip block mb-2">Name (Optional)</label>
               <input
                 type="text"
                 name="submitterName"
                 value={formData.submitterName}
                 onChange={handleChange}
                 placeholder="John Doe"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="field"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email (Optional)</label>
+              <label className="label-chip block mb-2">Email (Optional)</label>
               <input
                 type="email"
                 name="submitterEmail"
                 value={formData.submitterEmail}
                 onChange={handleChange}
                 placeholder="john@example.com"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="field"
               />
             </div>
           </div>
@@ -156,7 +171,7 @@ export default function Home() {
           <button
             type="submit"
             disabled={status === "loading"}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-md transition-colors disabled:bg-blue-400"
+            className="btn-accent w-full py-3.5 px-4"
           >
             {status === "loading" ? "Submitting..." : "Submit Feedback"}
           </button>
