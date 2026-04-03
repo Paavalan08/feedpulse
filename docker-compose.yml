@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  # --- 1. The React Frontend ---
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:4000
+    depends_on:
+      - backend
+
+  # --- 2. The Node/Express Backend ---
+  backend:
+    build: ./backend
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      # Notice we are NOT using your Atlas cloud URL here.
+      # We are telling it to talk to the local "mongo" container we are creating below!
+      - MONGO_URI=mongodb://mongo:27017/feedpulse
+      # Pass the Gemini key from your local machine into the container
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - JWT_SECRET=feedpulse_docker_secret_2026
+    depends_on:
+      - mongo
+
+  # --- 3. The Local MongoDB Database ---
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+# This saves your database data so it doesn't get deleted if you turn Docker off
+volumes:
+  mongo_data:
