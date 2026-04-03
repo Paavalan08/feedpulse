@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
+import ThemeToggle from "../components/ThemeToggle";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -64,9 +66,7 @@ export default function Home() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const submitFeedback = async () => {
     if (formData.description.length < 20) {
       setStatus("error");
       setErrorMessage("Description must be at least 20 characters long.");
@@ -95,6 +95,11 @@ export default function Home() {
       setStatus("error");
       setErrorMessage("Network error. Is the backend running?");
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    await submitFeedback();
   };
 
   const sendCoachMessage = async () => {
@@ -159,17 +164,24 @@ export default function Home() {
 
   return (
     <main className="min-h-screen px-4 py-10 md:px-8 md:py-14">
-      <div className="absolute top-6 right-6">
-        <a
-          href="/dashboard"
-          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm6-7a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-          Admin Console
-        </a>
-      </div>
+      <header className="mx-auto mb-6 flex w-full max-w-7xl items-center justify-between rounded-2xl border border-white/50 bg-white/65 px-4 py-3 backdrop-blur-md md:px-5">
+        <div>
+          <p className="label-chip">FeedPulse</p>
+          <p className="text-xs text-slate-600">AI-powered feedback workspace</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm6-7a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            Admin Console
+          </Link>
+          <ThemeToggle />
+        </div>
+      </header>
 
       <div className="mx-auto grid w-full max-w-7xl gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="surface-glass rounded-3xl p-6 md:p-8 reveal">

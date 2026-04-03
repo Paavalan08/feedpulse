@@ -139,3 +139,36 @@ export const coachFeedbackDraftWithAI = async ({
     return null;
   }
 };
+
+export const generateWeeklyFeedbackSummaryWithAI = async (feedbackTitles: string[]) => {
+  try {
+    const sanitizedTitles = feedbackTitles
+      .map(title => (typeof title === 'string' ? title.trim() : ''))
+      .filter(Boolean)
+      .slice(0, 80);
+
+    if (!sanitizedTitles.length) {
+      return 'No feedback in the last 7 days to summarize.';
+    }
+
+    const prompt = `
+      Analyze these product feedback titles from the last 7 days.
+      Return a concise paragraph describing the top 3 themes and why they matter.
+
+      Feedback titles:
+      ${sanitizedTitles.join('. ')}
+    `;
+
+    const response = await generateContentWithFallback(prompt);
+    const textResponse = response.text;
+
+    if (!textResponse || !textResponse.trim()) {
+      throw new Error('No response text from Gemini weekly summary');
+    }
+
+    return textResponse.trim();
+  } catch (error) {
+    console.error('Gemini Weekly Summary Failed:', error);
+    return null;
+  }
+};

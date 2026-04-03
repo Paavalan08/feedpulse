@@ -162,10 +162,21 @@ Make sure GEMINI_API_KEY is available in your shell/session before running docke
 
 ## Screenshots
 
-Before submission, add at least two screenshots:
+### 1) Public Feedback Page
 
-1. Public feedback submission page
-2. Admin dashboard page with sentiment/priority/status
+![Public Feedback Page](./screenshots/public-feedback.png)
+
+### 2) Public Feedback + AI Coach
+
+![Public Feedback AI Coach](./screenshots/public-feedback-ai-coach.png)
+
+### 3) Admin Dashboard Overview
+
+![Admin Dashboard Overview](./screenshots/admin-dashboard-overview.png)
+
+### 4) Admin Dashboard Insights
+
+![Admin Dashboard Insights](./screenshots/admin-dashboard-insights.png)
 
 ## What I Would Build Next
 

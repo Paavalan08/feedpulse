@@ -1,7 +1,11 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import Feedback from '../models/Feedback';
-import { analyzeFeedbackWithAI, coachFeedbackDraftWithAI } from '../services/gemini.service';
+import {
+  analyzeFeedbackWithAI,
+  coachFeedbackDraftWithAI,
+  generateWeeklyFeedbackSummaryWithAI,
+} from '../services/gemini.service';
 import { sendApiResponse } from '../utils/apiResponse';
 
 const ALLOWED_CATEGORIES = ['Bug', 'Feature Request', 'Improvement', 'Other'];
@@ -276,6 +280,59 @@ export const getAllFeedback = async (req: Request, res: Response): Promise<void>
       .limit(limitNumber);
 
     const total = await Feedback.countDocuments(query);
+    const statsAggregate = await Feedback.aggregate([
+      { $match: query },
+      {
+        $facet: {
+          summary: [
+            {
+              $group: {
+                _id: null,
+                avgPriority: { $avg: '$ai_priority' },
+                openItems: {
+                  $sum: {
+                    $cond: [{ $ne: ['$status', 'Resolved'] }, 1, 0],
+                  },
+                },
+                positive: {
+                  $sum: {
+                    $cond: [{ $eq: ['$ai_sentiment', 'Positive'] }, 1, 0],
+                  },
+                },
+                neutral: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $or: [
+                          { $eq: ['$ai_sentiment', 'Neutral'] },
+                          { $not: ['$ai_sentiment'] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                negative: {
+                  $sum: {
+                    $cond: [{ $eq: ['$ai_sentiment', 'Negative'] }, 1, 0],
+                  },
+                },
+              },
+            },
+          ],
+          topTag: [
+            { $unwind: { path: '$ai_tags', preserveNullAndEmptyArrays: false } },
+            { $group: { _id: '$ai_tags', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: 1 },
+          ],
+        },
+      },
+    ]);
+
+    const summary = statsAggregate[0]?.summary?.[0];
+    const topTag = statsAggregate[0]?.topTag?.[0]?._id;
 
     // 6. Send Response
     sendApiResponse(res, 200, {
@@ -286,6 +343,17 @@ export const getAllFeedback = async (req: Request, res: Response): Promise<void>
           total,
           page: pageNumber,
           pages: Math.ceil(total / limitNumber),
+        },
+        stats: {
+          totalFeedback: total,
+          openItems: summary?.openItems ?? 0,
+          averagePriority: typeof summary?.avgPriority === 'number' ? Number(summary.avgPriority.toFixed(1)) : null,
+          mostCommonTag: topTag ?? '-',
+          sentiment: {
+            Positive: summary?.positive ?? 0,
+            Neutral: summary?.neutral ?? 0,
+            Negative: summary?.negative ?? 0,
+          },
         },
       },
       message: 'Feedback fetched successfully',
@@ -457,21 +525,20 @@ export const getWeeklySummary = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    // Combine titles for the AI to read
-    const feedbackText = recentFeedbacks.map(f => f.title).join(". ");
-    
-    // We import the Google Gen AI client here directly for a quick custom prompt
-    const { GoogleGenAI } = require('@google/genai');
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: `Analyze these product feedback titles from the last 7 days: ${feedbackText}. What are the top 3 themes? Return a short summary paragraph.`
-    });
+    const summary = await generateWeeklyFeedbackSummaryWithAI(recentFeedbacks.map(f => f.title));
+
+    if (!summary) {
+      sendApiResponse(res, 502, {
+        success: false,
+        error: 'AI summary provider is currently unavailable',
+        message: 'Summary generation failed',
+      });
+      return;
+    }
 
     sendApiResponse(res, 200, {
       success: true,
-      data: response.text,
+      data: summary,
       message: 'Summary generated successfully',
     });
   } catch (error) {
