@@ -3,6 +3,9 @@ import Feedback from '../models/Feedback';
 import { analyzeFeedbackWithAI } from '../services/gemini.service';
 import { sendApiResponse } from '../utils/apiResponse';
 
+const ALLOWED_CATEGORIES = ['Bug', 'Feature Request', 'Improvement', 'Other'];
+const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
+
 // @desc    Submit new feedback
 // @route   POST /api/feedback
 // @access  Public
@@ -11,9 +14,12 @@ export const createFeedback = async (req: Request, res: Response): Promise<void>
     const { title, description, category, submitterName, submitterEmail } = req.body;
     const sanitizedTitle = typeof title === 'string' ? title.trim() : '';
     const sanitizedDescription = typeof description === 'string' ? description.trim() : '';
+    const sanitizedCategory = typeof category === 'string' ? category.trim() : '';
+    const sanitizedSubmitterName = typeof submitterName === 'string' ? submitterName.trim() : undefined;
+    const sanitizedSubmitterEmail = typeof submitterEmail === 'string' ? submitterEmail.trim() : undefined;
 
     // 1. Basic Input Validation (Requirement 4.5)
-    if (!sanitizedTitle || !sanitizedDescription || !category) {
+    if (!sanitizedTitle || !sanitizedDescription || !sanitizedCategory) {
       sendApiResponse(res, 400, {
         success: false,
         error: 'Please provide title, description, and category',
@@ -31,13 +37,31 @@ export const createFeedback = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    if (!ALLOWED_CATEGORIES.includes(sanitizedCategory)) {
+      sendApiResponse(res, 400, {
+        success: false,
+        error: 'Category must be one of: Bug, Feature Request, Improvement, Other',
+        message: 'Validation failed',
+      });
+      return;
+    }
+
+    if (sanitizedSubmitterEmail && !EMAIL_REGEX.test(sanitizedSubmitterEmail)) {
+      sendApiResponse(res, 400, {
+        success: false,
+        error: 'Please provide a valid submitter email address',
+        message: 'Validation failed',
+      });
+      return;
+    }
+
     // 2. Create the Feedback in the Database FIRST (so it's safe if AI fails)
     let feedback = await Feedback.create({
       title: sanitizedTitle,
       description: sanitizedDescription,
-      category,
-      submitterName,
-      submitterEmail,
+      category: sanitizedCategory,
+      submitterName: sanitizedSubmitterName,
+      submitterEmail: sanitizedSubmitterEmail,
     });
 
     // 3. Send Success Response IMMEDIATELY (Don't make the user wait for the AI)
