@@ -1,9 +1,11 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose';
 import connectDB from './config/db';
 import feedbackRoutes from './routes/feedbackRoutes';
 import authRoutes from './routes/authRoutes';
+import { ensureDefaultAdminUser } from './services/adminUser.service';
 
 // Load environment variables
 dotenv.config();
@@ -13,6 +15,13 @@ const app: Application = express();
 
 // Connect to MongoDB Atlas
 connectDB();
+mongoose.connection.once('open', async () => {
+  try {
+    await ensureDefaultAdminUser();
+  } catch (error) {
+    console.error('Failed to ensure default admin user', error);
+  }
+});
 
 // Middleware
 app.use(cors()); // Allows your Next.js frontend to communicate with this API

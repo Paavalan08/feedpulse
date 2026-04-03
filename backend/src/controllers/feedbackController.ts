@@ -1,13 +1,51 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import Feedback from '../models/Feedback';
-import { analyzeFeedbackWithAI } from '../services/gemini.service';
+import { analyzeFeedbackWithAI, coachFeedbackDraftWithAI } from '../services/gemini.service';
 import { sendApiResponse } from '../utils/apiResponse';
 
 const ALLOWED_CATEGORIES = ['Bug', 'Feature Request', 'Improvement', 'Other'];
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 const normalizeRouteParam = (value: string | string[] | undefined): string => {
   return typeof value === 'string' ? value : '';
+};
+
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'your', 'have', 'has', 'are', 'was', 'were',
+  'not', 'but', 'can', 'could', 'would', 'should', 'about', 'into', 'onto', 'very', 'much', 'more',
+  'when', 'where', 'what', 'which', 'while', 'after', 'before', 'user', 'users', 'app', 'dashboard',
+]);
+
+interface ThemeAggregate {
+  theme: string;
+  count: number;
+  totalPriority: number;
+  sentiment: {
+    Positive: number;
+    Neutral: number;
+    Negative: number;
+  };
+  lastSeenAt: Date;
+  sampleFeedbackTitles: string[];
+}
+
+const toTitleCase = (text: string): string => {
+  return text
+    .split(' ')
+    .filter(Boolean)
+    .map(word => word[0].toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const extractKeywordThemes = (text: string): string[] => {
+  if (!text) return [];
+  const tokens = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(token => token.length >= 4 && !STOPWORDS.has(token));
+
+  return Array.from(new Set(tokens)).slice(0, 2).map(toTitleCase);
 };
 
 // @desc    Submit new feedback
@@ -123,6 +161,65 @@ export const createFeedback = async (req: Request, res: Response): Promise<void>
   }
 
   
+};
+
+// @desc    AI draft coaching for public feedback form (multi-turn)
+// @route   POST /api/feedback/coach
+// @access  Public
+export const coachFeedbackDraft = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { title, description, category, chatHistory, message } = req.body ?? {};
+
+    const sanitizedTitle = typeof title === 'string' ? title.trim() : '';
+    const sanitizedDescription = typeof description === 'string' ? description.trim() : '';
+    const sanitizedCategory = typeof category === 'string' ? category.trim() : 'Other';
+    const sanitizedMessage = typeof message === 'string' ? message.trim() : '';
+
+    if (!sanitizedMessage) {
+      sendApiResponse(res, 400, {
+        success: false,
+        error: 'Please provide a message for the AI coach',
+        message: 'Validation failed',
+      });
+      return;
+    }
+
+    const parsedHistory = Array.isArray(chatHistory)
+      ? chatHistory
+          .filter(item => item && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string')
+          .map(item => ({ role: item.role, content: item.content.trim() }))
+          .filter(item => item.content)
+      : [];
+
+    const aiResult = await coachFeedbackDraftWithAI({
+      title: sanitizedTitle,
+      description: sanitizedDescription,
+      category: ALLOWED_CATEGORIES.includes(sanitizedCategory) ? sanitizedCategory : 'Other',
+      chatHistory: parsedHistory,
+      latestUserMessage: sanitizedMessage,
+    });
+
+    if (!aiResult) {
+      sendApiResponse(res, 502, {
+        success: false,
+        error: 'AI coach is currently unavailable. Please try again.',
+        message: 'Draft coaching failed',
+      });
+      return;
+    }
+
+    sendApiResponse(res, 200, {
+      success: true,
+      data: aiResult,
+      message: 'Draft coaching response generated',
+    });
+  } catch (error) {
+    sendApiResponse(res, 500, {
+      success: false,
+      error: 'Failed to generate AI draft coaching response',
+      message: 'Draft coaching failed',
+    });
+  }
 };
 
 // @desc    Get all feedback (with filtering, sorting, pagination)
@@ -382,6 +479,164 @@ export const getWeeklySummary = async (req: Request, res: Response): Promise<voi
       success: false,
       error: 'Failed to generate summary',
       message: 'Summary generation failed',
+    });
+  }
+};
+
+export const reanalyzeFeedback = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const feedbackId = normalizeRouteParam(req.params.id);
+
+    if (!mongoose.Types.ObjectId.isValid(feedbackId)) {
+      sendApiResponse(res, 400, {
+        success: false,
+        error: 'Invalid feedback ID format',
+        message: 'Validation failed',
+      });
+      return;
+    }
+
+    const feedback = await Feedback.findById(feedbackId);
+
+    if (!feedback) {
+      sendApiResponse(res, 404, {
+        success: false,
+        error: 'Feedback not found',
+        message: 'Reanalysis failed',
+      });
+      return;
+    }
+
+    sendApiResponse(res, 200, {
+      success: true,
+      data: { ...feedback.toObject(), ai_processed: false },
+      message: 'Feedback reanalysis queued',
+    });
+
+    // Background: Re-analyze with Gemini
+    const aiResult = await analyzeFeedbackWithAI(feedback.title, feedback.description);
+
+    if (aiResult) {
+      await Feedback.findByIdAndUpdate(feedbackId, {
+        ai_category: aiResult.category,
+        ai_sentiment: aiResult.sentiment,
+        ai_priority: aiResult.priority_score,
+        ai_summary: aiResult.summary,
+        ai_tags: aiResult.tags,
+        ai_processed: true,
+      });
+      console.log(`[AI Reanalysis Success] Updated feedback ID: ${feedbackId}`);
+    }
+  } catch (error) {
+    sendApiResponse(res, 500, {
+      success: false,
+      error: 'Failed to reanalyze feedback',
+      message: 'Reanalysis failed',
+    });
+  }
+};
+
+export const getFeedbackThemes = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawDays = parseInt((req.query.days as string) ?? '30', 10);
+    const rawLimit = parseInt((req.query.limit as string) ?? '6', 10);
+    const days = Number.isNaN(rawDays) || rawDays < 1 ? 30 : Math.min(rawDays, 90);
+    const limit = Number.isNaN(rawLimit) || rawLimit < 1 ? 6 : Math.min(rawLimit, 12);
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const feedbacks = await Feedback.find({ createdAt: { $gte: startDate } })
+      .select('title ai_tags ai_summary ai_priority ai_sentiment createdAt')
+      .lean();
+
+    if (!feedbacks.length) {
+      sendApiResponse(res, 200, {
+        success: true,
+        data: {
+          themes: [],
+          windowDays: days,
+          totalAnalyzed: 0,
+          generatedAt: new Date().toISOString(),
+        },
+        message: 'No feedback available for theme clustering',
+      });
+      return;
+    }
+
+    const themeMap = new Map<string, ThemeAggregate>();
+
+    for (const feedback of feedbacks) {
+      const tagThemes = (feedback.ai_tags ?? [])
+        .filter(tag => typeof tag === 'string' && tag.trim())
+        .map(tag => toTitleCase(tag.trim()));
+      const keywordThemes = extractKeywordThemes(`${feedback.ai_summary ?? ''} ${feedback.title ?? ''}`);
+      const feedbackThemes = Array.from(new Set([...tagThemes, ...keywordThemes])).slice(0, 3);
+
+      for (const theme of feedbackThemes) {
+        const key = theme.toLowerCase();
+        const current = themeMap.get(key) ?? {
+          theme,
+          count: 0,
+          totalPriority: 0,
+          sentiment: { Positive: 0, Neutral: 0, Negative: 0 },
+          lastSeenAt: new Date(0),
+          sampleFeedbackTitles: [],
+        };
+
+        current.count += 1;
+        current.totalPriority += typeof feedback.ai_priority === 'number' ? feedback.ai_priority : 5;
+
+        if (feedback.ai_sentiment === 'Positive' || feedback.ai_sentiment === 'Neutral' || feedback.ai_sentiment === 'Negative') {
+          current.sentiment[feedback.ai_sentiment] += 1;
+        } else {
+          current.sentiment.Neutral += 1;
+        }
+
+        if (feedback.createdAt && new Date(feedback.createdAt) > current.lastSeenAt) {
+          current.lastSeenAt = new Date(feedback.createdAt);
+        }
+
+        if (feedback.title && current.sampleFeedbackTitles.length < 2) {
+          current.sampleFeedbackTitles.push(feedback.title);
+        }
+
+        themeMap.set(key, current);
+      }
+    }
+
+    const themes = Array.from(themeMap.values())
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        const bAvg = b.totalPriority / b.count;
+        const aAvg = a.totalPriority / a.count;
+        return bAvg - aAvg;
+      })
+      .slice(0, limit)
+      .map(item => ({
+        theme: item.theme,
+        count: item.count,
+        avgPriority: Number((item.totalPriority / item.count).toFixed(1)),
+        sentimentBreakdown: item.sentiment,
+        lastSeenAt: item.lastSeenAt,
+        sampleFeedbackTitles: item.sampleFeedbackTitles,
+      }));
+
+    sendApiResponse(res, 200, {
+      success: true,
+      data: {
+        themes,
+        windowDays: days,
+        totalAnalyzed: feedbacks.length,
+        generatedAt: new Date().toISOString(),
+      },
+      message: 'Feedback themes generated successfully',
+    });
+  } catch (error) {
+    sendApiResponse(res, 500, {
+      success: false,
+      error: 'Failed to generate feedback themes',
+      message: 'Theme clustering failed',
     });
   }
 };
