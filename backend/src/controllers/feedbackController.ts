@@ -141,11 +141,15 @@ export const getAllFeedback = async (req: Request, res: Response): Promise<void>
     const query: any = {};
 
     // Filters (Requirements 3.3 & 3.4)
-    if (category) query.category = category;
-    if (status) query.status = status;
+    if (typeof category === 'string' && ALLOWED_CATEGORIES.includes(category)) {
+      query.category = category;
+    }
+    if (typeof status === 'string' && ['New', 'In Review', 'Resolved'].includes(status)) {
+      query.status = status;
+    }
 
     // Search (Requirement 3.7 - searches title and AI summary)
-    if (search) {
+    if (typeof search === 'string' && search.trim()) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
         { ai_summary: { $regex: search, $options: 'i' } }
@@ -159,8 +163,10 @@ export const getAllFeedback = async (req: Request, res: Response): Promise<void>
     if (sort === 'sentiment') sortOption = { ai_sentiment: 1, createdAt: -1 };
 
     // 4. Pagination Logic (Requirement 3.9)
-    const pageNumber = parseInt(page as string, 10);
-    const limitNumber = parseInt(limit as string, 10);
+    const parsedPage = parseInt(page as string, 10);
+    const parsedLimit = parseInt(limit as string, 10);
+    const pageNumber = Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+    const limitNumber = Number.isNaN(parsedLimit) || parsedLimit < 1 ? 10 : Math.min(parsedLimit, 100);
     const skip = (pageNumber - 1) * limitNumber;
 
     // 5. Execute Database Query
