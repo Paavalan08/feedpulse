@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Feedback from '../models/Feedback';
 import { analyzeFeedbackWithAI } from '../services/gemini.service';
 import { sendApiResponse } from '../utils/apiResponse';
@@ -89,6 +90,26 @@ export const createFeedback = async (req: Request, res: Response): Promise<void>
 
   } catch (error) {
     console.error('Error creating feedback:', error);
+
+    if (error instanceof mongoose.Error.ValidationError) {
+      const firstError = Object.values(error.errors)[0];
+      sendApiResponse(res, 400, {
+        success: false,
+        error: firstError?.message ?? 'Invalid feedback payload',
+        message: 'Validation failed',
+      });
+      return;
+    }
+
+    if (error instanceof mongoose.Error.CastError) {
+      sendApiResponse(res, 400, {
+        success: false,
+        error: 'Invalid value provided in request payload',
+        message: 'Validation failed',
+      });
+      return;
+    }
+
     if (!res.headersSent) {
       sendApiResponse(res, 500, {
         success: false,
