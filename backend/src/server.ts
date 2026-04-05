@@ -1,5 +1,5 @@
 import express, { Application, Request, Response } from 'express';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import connectDB from './config/db';
@@ -13,6 +13,30 @@ dotenv.config();
 // Initialize Express
 const app: Application = express();
 
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:3000,http://localhost:3001')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+const corsOptions: CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow non-browser requests (Postman/curl) and same-origin calls without Origin header
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
 // Connect to MongoDB Atlas
 connectDB();
 mongoose.connection.once('open', async () => {
@@ -24,7 +48,7 @@ mongoose.connection.once('open', async () => {
 });
 
 // Middleware
-app.use(cors()); // Allows your Next.js frontend to communicate with this API
+app.use(cors(corsOptions));
 app.use(express.json()); // Allows the server to accept JSON data in the request body
 
 // Mount Routes
