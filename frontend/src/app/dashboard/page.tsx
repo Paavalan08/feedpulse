@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import MotionToggle from "../../components/MotionToggle";
 import ThemeToggle from "../../components/ThemeToggle";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -105,6 +106,7 @@ export default function Dashboard() {
   const [summaryUpdatedAt, setSummaryUpdatedAt] = useState<string>("");
   const [themesUpdatedAt, setThemesUpdatedAt] = useState<string>("");
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -278,6 +280,111 @@ export default function Dashboard() {
     void loadWeeklySummary();
   }, [loadWeeklySummary]);
 
+  const buildFeedbackQuery = useCallback((targetPage: number, targetLimit: number) => {
+    let url = `${API_BASE_URL}/api/feedback?`;
+    if (filterCategory) url += `category=${encodeURIComponent(filterCategory)}&`;
+    if (filterStatus) url += `status=${encodeURIComponent(filterStatus)}&`;
+    if (searchTerm.trim()) url += `search=${encodeURIComponent(searchTerm.trim())}&`;
+    if (sortBy && sortBy !== "latest") url += `sort=${encodeURIComponent(sortBy)}&`;
+    url += `page=${targetPage}&limit=${targetLimit}`;
+    return url;
+  }, [filterCategory, filterStatus, searchTerm, sortBy]);
+
+  const exportCsv = useCallback(async () => {
+    if (!token) return;
+
+    try {
+      const res = await fetch(buildFeedbackQuery(1, 1000), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        showToast("error", "Failed to export CSV.");
+        return;
+      }
+
+      const items: Feedback[] = data.data.items || [];
+      if (!items.length) {
+        showToast("error", "No feedback to export for current filters.");
+        return;
+      }
+
+      const escapeCsv = (value: unknown): string => {
+        const text = String(value ?? "");
+        return `"${text.replace(/"/g, '""')}"`;
+      };
+
+      const header = [
+        "Title",
+        "Category",
+        "Status",
+        "Sentiment",
+        "Priority",
+        "Summary",
+        "Tags",
+        "CreatedAt",
+      ];
+
+      const rows = items.map((item) => [
+        escapeCsv(item.title),
+        escapeCsv(item.category),
+        escapeCsv(item.status),
+        escapeCsv(item.ai_sentiment || "Pending AI"),
+        escapeCsv(item.ai_priority ?? ""),
+        escapeCsv(item.ai_summary || item.description),
+        escapeCsv((item.ai_tags || []).join("|")),
+        escapeCsv(new Date(item.createdAt).toISOString()),
+      ].join(","));
+
+      const csv = [header.join(","), ...rows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const exportUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = exportUrl;
+      link.download = `feedpulse-feedback-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(exportUrl);
+
+      showToast("success", `Exported ${items.length} feedback entries.`);
+    } catch {
+      showToast("error", "Failed to export CSV.");
+    }
+  }, [token, buildFeedbackQuery, showToast]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTypingContext =
+        tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable;
+
+      if (isTypingContext) return;
+
+      if (event.key === "/") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+
+      if (event.key.toLowerCase() === "r") {
+        event.preventDefault();
+        void loadWeeklySummary();
+      }
+
+      if (event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        void exportCsv();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [token, loadWeeklySummary, exportCsv]);
+
   const handleReanalyze = async (id: string) => {
     setReanalyzingId(id);
     try {
@@ -403,6 +510,7 @@ export default function Dashboard() {
               <button onClick={handleLogout} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-rose-700 font-semibold hover:bg-rose-100 transition-colors w-fit">
                 Logout
               </button>
+              <MotionToggle />
               <ThemeToggle />
             </div>
           </div>
@@ -473,7 +581,7 @@ export default function Dashboard() {
       </div>
 
       {/* Filters */}
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mb-6 surface-card rounded-2xl p-4 md:p-5">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 mb-6 surface-card rounded-2xl p-4 md:p-5">
         <div>
           <label className="label-chip block mb-2">Filter Category</label>
           <select 
@@ -510,6 +618,7 @@ export default function Dashboard() {
         <div>
           <label className="label-chip block mb-2">Search</label>
           <input
+            ref={searchInputRef}
             type="text"
             value={searchTerm}
             onChange={(e) => {
@@ -550,6 +659,15 @@ export default function Dashboard() {
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
           >
             Reset Filters
+          </button>
+        </div>
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={() => void exportCsv()}
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+          >
+            Export CSV
           </button>
         </div>
       </div>

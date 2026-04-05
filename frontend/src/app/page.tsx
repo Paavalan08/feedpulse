@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import MotionToggle from "../components/MotionToggle";
 import ThemeToggle from "../components/ThemeToggle";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -179,6 +180,7 @@ export default function Home() {
             </svg>
             Admin Console
           </Link>
+          <MotionToggle />
           <ThemeToggle />
         </div>
       </header>
